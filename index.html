@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste do microfone</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@500;700&family=Mulish:wght@400;600;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<!--
+ Teste do microfone (marco 2 da avaliação das fundadoras, 2026-11-25)
+ Pergunta que este teste responde: dentro de um app da web do Google Apps Script, o celular deixa abrir o microfone
+ e transformar a fala em texto? A página do estudo (artefato do claude.ai) não deixa; se aqui deixar, a página de
+ envio pode morar no Apps Script. Se não deixar, ela vai para a VPS.
+ O módulo de voz é o do Canvas 5 Momentos do thinkwall (Web Speech, pt-BR, contínuo, texto parcial), com uma
+ correção: quando a escuta reinicia sozinha depois de uma pausa, o texto já reconhecido é somado, não substituído.
+ Nada é gravado em áudio. O resultado vai para a planilha de Wagner (aba "teste-microfone") quando a página roda
+ no Apps Script; fora dele, o botão copia o resultado.
+-->
+<style>
+:root{--ameixa:#3A1D37;--creme:#FBF1E8;--marfim:#FFF8F0;--vermelho:#CE3B32;--verde:#1E6E62;--suave:#6E5468;--linha:rgba(58,29,55,.18);
+ --f-disp:'Comfortaa',ui-rounded,system-ui,sans-serif;--f-txt:'Mulish',system-ui,-apple-system,'Segoe UI',sans-serif;--f-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--creme);color:var(--ameixa);font:16px/1.5 var(--f-txt);padding:20px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px))}
+main{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font:700 26px/1.2 var(--f-disp);margin:4px 0 0;text-wrap:balance}
+p{margin:0}
+.intro{color:var(--suave)}
+.cartao{background:#fff;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.passo{font:500 12px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--suave)}
+h2{font:700 19px/1.3 var(--f-disp);margin:0}
+label{font-weight:800;font-size:14px}
+input{width:100%;min-height:48px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--linha);font:16px var(--f-txt);color:var(--ameixa);background:var(--marfim)}
+button{min-height:52px;border-radius:999px;border:0;padding:0 20px;font:800 16px var(--f-txt);cursor:pointer;background:var(--ameixa);color:var(--creme)}
+button.sec{background:transparent;color:var(--ameixa);border:1.5px solid var(--linha)}
+button.ouvindo{background:var(--vermelho)}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid var(--vermelho);outline-offset:3px}
+.res{font-weight:800;min-height:1.5em}
+.res.ok{color:var(--verde)}
+.res.erro{color:var(--vermelho)}
+.fala{min-height:96px;border-radius:14px;background:var(--marfim);border:1.5px dashed var(--linha);padding:12px 14px;white-space:pre-wrap}
+.fala .parcial{color:var(--suave);font-style:italic}
+.dica{font-size:14px;color:var(--suave)}
+details{font-size:13px;color:var(--suave)}
+details pre{white-space:pre-wrap;word-break:break-word;font:12px/1.5 var(--f-mono);background:var(--marfim);border-radius:12px;padding:10px;margin:8px 0 0}
+.envio{display:flex;flex-direction:column;gap:10px}
+@media (prefers-reduced-motion:no-preference){button.ouvindo{animation:pulso 1.4s ease-in-out infinite}}
+@keyframes pulso{50%{box-shadow:0 0 0 8px rgba(206,59,50,.18)}}
+</style>
+</head>
+<body>
+<main>
+ <header>
+  <p class="passo">Entre Ser · teste rápido</p>
+  <h1>Teste do microfone</h1>
+ </header>
+ <p class="intro">Este teste mostra se o seu aparelho deixa falar em vez de digitar. Leva menos de um minuto. Nada é gravado em áudio: só o texto da frase de teste.</p>
+
+ <section class="cartao" aria-labelledby="t0">
+  <p class="passo">Antes</p>
+  <h2 id="t0">Quem está testando</h2>
+  <label for="nome">Seu nome (para sabermos de quem é o resultado)</label>
+  <input id="nome" autocomplete="name" placeholder="Escreva seu nome">
+ </section>
+
+ <section class="cartao" aria-labelledby="t1">
+  <p class="passo">Passo 1</p>
+  <h2 id="t1">O microfone abre?</h2>
+  <p class="dica">Se o aparelho perguntar, toque em Permitir.</p>
+  <button type="button" id="btMic">Testar o microfone</button>
+  <p class="res" id="resMic" role="status"></p>
+ </section>
+
+ <section class="cartao" aria-labelledby="t2">
+  <p class="passo">Passo 2</p>
+  <h2 id="t2">A fala vira texto?</h2>
+  <p class="dica">Toque em Falar e diga uma frase, por exemplo: hoje eu li o momento um. Faça uma pausa curta e diga mais uma frase. Depois toque em Parar.</p>
+  <button type="button" id="btFala">Falar</button>
+  <div class="fala" id="fala" aria-live="polite"><span id="falaFinal"></span> <span class="parcial" id="falaParcial"></span></div>
+  <p class="res" id="resFala" role="status"></p>
+ </section>
+
+ <section class="cartao envio" aria-labelledby="t3">
+  <p class="passo">Passo 3</p>
+  <h2 id="t3">Mandar o resultado</h2>
+  <p class="dica" id="dicaEnvio">O resultado vai para a planilha do Wagner, com o seu nome, o tipo do aparelho e o texto da frase de teste.</p>
+  <button type="button" id="btEnviar">Enviar o resultado</button>
+  <button type="button" class="sec" id="btCopiar">Copiar o resultado</button>
+  <p class="res" id="resEnvio" role="status"></p>
+  <details><summary>Detalhes técnicos</summary><pre id="detalhes"></pre></details>
+ </section>
+</main>
+<script>
+(() => {
+ const $ = id => document.getElementById(id);
+ const R = window.SpeechRecognition || window.webkitSpeechRecognition;
+ /* Envio (25/11/2026): dentro do Apps Script o microfone é recusado pela moldura do Google, então a página mora num
+    endereço nosso e manda o resultado para o app do Apps Script (doPost) pelo endereço abaixo. Dentro do Apps Script,
+    usa google.script.run. Sem nenhum dos dois, só copia. */
+ const ENVIO_URL = 'https://script.google.com/macros/s/AKfycbzvgAQNenbm_gKzz3IVeVyYo09jrXTnWk9i7abKuiYJjEiekol00iU8ICG4EcmuB3LAIg/exec';
+ const noAppsScript = !!(window.google && google.script && google.script.run);
+ const modoEnvio = noAppsScript ? 'apps-script' : ENVIO_URL ? 'endereco' : 'copiar';
+ const r = {
+  quando: '', nome: '', aparelho: navigator.userAgent, idioma: navigator.language || '',
+  em_moldura: (() => { try { return window.self !== window.top ? 'sim' : 'não' } catch (_) { return 'sim' } })(),
+  origem: location.origin, no_apps_script: noAppsScript ? 'sim' : 'não', modo_envio: modoEnvio,
+  suporte_fala: window.SpeechRecognition ? 'sim' : window.webkitSpeechRecognition ? 'sim (webkit)' : 'não',
+  permissao_microfone: 'não consultada', politica_microfone: 'não informada',
+  microfone: 'não testado', fala: 'não testada', palavras: 0, reinicios: 0, texto: ''
+ };
+ try { const fp = document.permissionsPolicy || document.featurePolicy; if (fp && fp.allowsFeature) r.politica_microfone = fp.allowsFeature('microphone') ? 'permite' : 'bloqueia' } catch (_) { }
+ async function consultarPermissao() { try { if (navigator.permissions && navigator.permissions.query) { const s = await navigator.permissions.query({ name: 'microphone' }); r.permissao_microfone = s.state } } catch (_) { r.permissao_microfone = 'não informada' } mostrarDetalhes() }
+ function mostrarDetalhes() { r.nome = $('nome').value.trim(); $('detalhes').textContent = JSON.stringify(r, null, 1) }
+ const marcar = (el, txt, tipo) => { el.textContent = txt; el.className = 'res' + (tipo ? ' ' + tipo : '') };
+ try { $('nome').value = localStorage.getItem('teste-microfone-nome') || '' } catch (_) { }
+ $('nome').addEventListener('change', () => { try { localStorage.setItem('teste-microfone-nome', $('nome').value.trim()) } catch (_) { } mostrarDetalhes() });
+
+ /* ---------- passo 1: o microfone abre? ---------- */
+ const MOTIVO = {
+  NotAllowedError: 'o acesso ao microfone foi negado (pelo aparelho, pelo navegador ou pela página)',
+  SecurityError: 'a página não tem permissão para usar o microfone aqui',
+  NotFoundError: 'nenhum microfone foi encontrado',
+  NotReadableError: 'o microfone está em uso por outro aplicativo',
+  AbortError: 'o pedido foi interrompido'
+ };
+ $('btMic').addEventListener('click', async () => {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { r.microfone = 'erro: sem acesso a microfone neste navegador'; marcar($('resMic'), 'Não funcionou: este navegador não oferece o microfone para páginas.', 'erro'); mostrarDetalhes(); return }
+  marcar($('resMic'), 'Pedindo o microfone…');
+  try {
+   const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+   s.getTracks().forEach(t => t.stop());
+   r.microfone = 'ok'; marcar($('resMic'), 'Funcionou: o microfone abriu.', 'ok');
+  } catch (e) {
+   r.microfone = 'erro: ' + (e && e.name || 'desconhecido') + (e && e.message ? ' · ' + e.message : '');
+   marcar($('resMic'), 'Não funcionou: ' + (MOTIVO[e && e.name] || 'erro ' + (e && e.name || 'desconhecido')) + '.', 'erro');
+  }
+  consultarPermissao();
+ });
+
+ /* ---------- passo 2: módulo de voz do thinkwall, com a correção da pausa ---------- */
+ const juntar = (...p) => p.map(x => (x || '').trim()).filter(Boolean).join(' ');
+ const Voz = {
+  rec: null, ativo: false, acumulado: '', sessao: '', parciais: '', semResultado: 0,
+  suportado: !!R,
+  texto() { return juntar(this.acumulado, this.sessao) },
+  iniciar(aoMudar, aoErro) { this.acumulado = ''; this.sessao = ''; this.parciais = ''; this.semResultado = 0; this.ativo = true; return this.abrir(aoMudar, aoErro) },
+  abrir(aoMudar, aoErro) {
+   const rec = new R(); rec.lang = 'pt-BR'; rec.continuous = true; rec.interimResults = true;
+   let teveResultado = false;
+   rec.onresult = ev => {
+    teveResultado = true; let f = '', p = '';
+    for (let k = 0; k < ev.results.length; k++) { const x = ev.results[k]; if (x.isFinal) f += x[0].transcript + ' '; else p += x[0].transcript + ' ' }
+    this.sessao = f.trim(); this.parciais = p.trim(); if (aoMudar) aoMudar();
+   };
+   rec.onerror = ev => {
+    if (ev.error === 'no-speech') return;                     /* silêncio: a escuta segue */
+    if (['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported'].includes(ev.error)) { this.ativo = false }
+    if (aoErro) aoErro(ev.error);
+   };
+   rec.onend = () => {
+    if (this.rec !== rec) return;
+    /* correção: o que a sessão reconheceu é somado antes de reiniciar (no thinkwall era trocado) */
+    this.acumulado = juntar(this.acumulado, this.sessao); this.sessao = ''; this.parciais = '';
+    this.semResultado = teveResultado ? 0 : this.semResultado + 1;
+    if (this.ativo && this.semResultado < 3) { r.reinicios++; try { this.abrir(aoMudar, aoErro) } catch (_) { this.ativo = false; if (aoMudar) aoMudar() } }
+    else { this.ativo = false; this.rec = null; if (aoMudar) aoMudar() }
+   };
+   try { rec.start() } catch (e) { this.ativo = false; if (aoErro) aoErro('start: ' + (e && e.message || e)); return false }
+   this.rec = rec; return true;
+  },
+  parar() {
+   this.ativo = false;
+   if (this.rec) { const rec = this.rec; this.rec = null; try { rec.onend = null; rec.stop() } catch (_) { } }
+   this.acumulado = juntar(this.acumulado, this.sessao, this.parciais); this.sessao = ''; this.parciais = '';
+   return this.acumulado;
+  }
+ };
+ const MOTIVO_FALA = {
+  'not-allowed': 'o microfone foi negado para a fala', 'service-not-allowed': 'o serviço de fala não é permitido aqui',
+  'audio-capture': 'o microfone não pôde ser usado', 'network': 'sem conexão com o serviço de fala',
+  'language-not-supported': 'o português do Brasil não está disponível', 'aborted': 'a escuta foi interrompida'
+ };
+ const contar = t => t ? t.split(/\s+/).filter(Boolean).length : 0;
+ function desenharFala() {
+  $('falaFinal').textContent = Voz.texto(); $('falaParcial').textContent = Voz.parciais;
+  const ouvindo = Voz.ativo; $('btFala').textContent = ouvindo ? 'Parar' : 'Falar'; $('btFala').classList.toggle('ouvindo', ouvindo);
+  if (ouvindo) { const n = contar(juntar(Voz.texto(), Voz.parciais)); marcar($('resFala'), `Ouvindo… ${n} palavra${n === 1 ? '' : 's'}`) }
+ }
+ function terminarFala() {
+  const t = Voz.parar(); r.texto = t.slice(0, 300); r.palavras = contar(t);
+  if (r.fala.startsWith('erro')) { /* mantém o erro já mostrado */ }
+  else if (r.palavras) { r.fala = 'ok'; marcar($('resFala'), `Funcionou: ${r.palavras} palavra${r.palavras === 1 ? '' : 's'} reconhecida${r.palavras === 1 ? '' : 's'}.`, 'ok') }
+  else { r.fala = 'sem texto'; marcar($('resFala'), 'Nenhuma palavra foi reconhecida. Tente de novo falando um pouco mais perto.', 'erro') }
+  desenharFala(); mostrarDetalhes();
+ }
+ $('btFala').addEventListener('click', () => {
+  if (Voz.ativo) { terminarFala(); return }
+  if (!Voz.suportado) { r.fala = 'erro: sem reconhecimento de fala neste navegador'; marcar($('resFala'), 'Não funcionou: este navegador não transforma fala em texto. Para comentar, o teclado do celular tem o próprio microfone.', 'erro'); mostrarDetalhes(); return }
+  r.fala = 'não testada'; marcar($('resFala'), 'Abrindo o microfone…');
+  const ok = Voz.iniciar(desenharFala, codigo => {
+   r.fala = 'erro: ' + codigo;
+   marcar($('resFala'), 'Não funcionou: ' + (MOTIVO_FALA[codigo] || 'erro ' + codigo) + '.', 'erro');
+   if (!Voz.ativo) { Voz.parar(); desenharFala() }
+   mostrarDetalhes();
+  });
+  if (ok) desenharFala();
+  consultarPermissao();
+ });
+
+ /* ---------- passo 3: mandar o resultado ---------- */
+ const textoResultado = () => { mostrarDetalhes(); return 'Teste do microfone · Entre Ser\n' + Object.entries(r).map(([k, v]) => `${k}: ${v}`).join('\n') };
+ if (modoEnvio === 'copiar') { $('btEnviar').hidden = true; $('dicaEnvio').textContent = 'Copie o resultado e mande para o Wagner.' }
+ /* só diz "Recebido" quando a gravação respondeu que gravou */
+ function enviar(dados, ok, falha) {
+  if (modoEnvio === 'apps-script') { google.script.run.withSuccessHandler(ok).withFailureHandler(falha).registrar(dados); return }
+  fetch(ENVIO_URL, { method: 'POST', body: JSON.stringify(dados), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow' })
+   .then(res => res.ok ? res.text() : Promise.reject(new Error('resposta ' + res.status)))
+   .then(t => { let j = null; try { j = JSON.parse(t) } catch (_) { } if (j && j.ok) ok(); else falha(new Error(j && j.erro ? j.erro : 'a planilha não confirmou')) })
+   .catch(e => falha(e && e.name === 'TypeError' ? new Error('sem resposta da planilha') : e));
+ }
+ $('btEnviar').addEventListener('click', () => {
+  if (Voz.ativo) terminarFala();
+  r.quando = new Date().toISOString(); mostrarDetalhes();
+  if (!r.nome) { marcar($('resEnvio'), 'Escreva seu nome no começo da página antes de enviar.', 'erro'); $('nome').focus(); return }
+  $('btEnviar').disabled = true; marcar($('resEnvio'), 'Enviando…');
+  enviar(Object.assign({}, r),
+   () => { $('btEnviar').disabled = false; marcar($('resEnvio'), 'Recebido. Obrigado pelo teste.', 'ok') },
+   e => { $('btEnviar').disabled = false; marcar($('resEnvio'), 'Não foi enviado: ' + (e && e.message || 'erro') + '. Tente de novo, ou copie o resultado e mande para o Wagner.', 'erro') });
+ });
+ $('btCopiar').addEventListener('click', async () => {
+  if (Voz.ativo) terminarFala();
+  r.quando = r.quando || new Date().toISOString();
+  const t = textoResultado();
+  try { await navigator.clipboard.writeText(t); marcar($('resEnvio'), 'Copiado. Cole numa mensagem para o Wagner.', 'ok') }
+  catch (_) { const s = getSelection(), rg = document.createRange(); $('detalhes').parentElement.open = true; rg.selectNodeContents($('detalhes')); s.removeAllRanges(); s.addRange(rg); marcar($('resEnvio'), 'Não deu para copiar sozinho. O resultado está selecionado nos detalhes técnicos: copie e mande para o Wagner.', 'erro') }
+ });
+ consultarPermissao(); mostrarDetalhes();
+})();
+</script>
+</body>
+</html>
