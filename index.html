@@ -100,7 +100,7 @@ details pre{white-space:pre-wrap;word-break:break-word;font:12px/1.5 var(--f-mon
  /* Envio (25/11/2026): dentro do Apps Script o microfone é recusado pela moldura do Google, então a página mora num
     endereço nosso e manda o resultado para o app do Apps Script (doPost) pelo endereço abaixo. Dentro do Apps Script,
     usa google.script.run. Sem nenhum dos dois, só copia. */
- const ENVIO_URL = 'https://script.google.com/macros/s/AKfycbzrzCvLhVaUlk1yyy50MIkePVorusgl90zt2F4uDI5e68Vc0Ko6zJ5VYwh9APBYvvDURg/exec';
+ const ENVIO_URL = 'https://script.google.com/macros/s/AKfycby8nZkeitSj3kSWpuH681ZrmofwLZ4uk_y2z11aML6gExlUQklr3yA5eknXx75CFyW72w/exec';
  const noAppsScript = !!(window.google && google.script && google.script.run);
  const modoEnvio = noAppsScript ? 'apps-script' : ENVIO_URL ? 'endereco' : 'copiar';
  const r = {
