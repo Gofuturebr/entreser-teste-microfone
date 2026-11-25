@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Enviar comentários · Entre Ser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@500;700&family=Mulish:wght@400;600;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<!--
+ Página de envio dos comentários (avaliação das fundadoras, marco 2, 2026-11-25; docs/06, seção 15).
+ O estudo (artefato do claude.ai) não deixa usar o microfone nem enviar dados para fora. Por isso ele abre esta página
+ numa aba nova, com o ponto ou os comentários depois do # do link (#d=, JSON em base64 de URL). Aqui a pessoa fala
+ (módulo de voz do thinkwall, em voz.js), confere, e envia. O envio vai para o app do Apps Script ligado à planilha
+ (doPost), que responde quantos gravou. Só depois disso a página diz "Recebido".
+ Não perder: o que chega pelo link fica guardado neste navegador até a planilha confirmar.
+-->
+<style>
+:root{--ameixa:#3A1D37;--creme:#FBF1E8;--marfim:#FFF8F0;--vermelho:#CE3B32;--verde:#1E6E62;--suave:#6E5468;--linha:rgba(58,29,55,.18);--lilas:#F1E8F4;
+ --f-disp:'Comfortaa',ui-rounded,system-ui,sans-serif;--f-txt:'Mulish',system-ui,-apple-system,'Segoe UI',sans-serif;--f-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--creme);color:var(--ameixa);font:16px/1.5 var(--f-txt);padding:20px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px))}
+main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1{font:700 25px/1.2 var(--f-disp);margin:4px 0 0;text-wrap:balance}
+h2{font:700 18px/1.3 var(--f-disp);margin:0}
+p{margin:0}
+.olho{font:500 12px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--suave)}
+.intro,.dica{color:var(--suave)}
+.dica{font-size:14px}
+.cartao{background:#fff;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.aviso{background:var(--lilas)}
+label,.rot{font-weight:800;font-size:14px}
+input,textarea{width:100%;padding:12px 14px;border-radius:14px;border:1.5px solid var(--linha);font:16px/1.45 var(--f-txt);color:var(--ameixa);background:var(--marfim)}
+input{min-height:48px}
+textarea{min-height:96px;resize:vertical}
+button{min-height:48px;border-radius:999px;border:0;padding:0 20px;font:800 15.5px var(--f-txt);cursor:pointer;background:var(--ameixa);color:var(--creme)}
+button.sec{background:transparent;color:var(--ameixa);border:1.5px solid var(--linha)}
+button.ouvindo{background:var(--vermelho)}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--vermelho);outline-offset:3px}
+.ops{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.op{min-height:46px;border-radius:14px;border:1.5px solid var(--linha);background:#fff;color:var(--ameixa);font:700 14px/1.2 var(--f-txt);padding:6px 10px}
+.op[aria-checked="true"]{background:var(--ameixa);border-color:var(--ameixa);color:var(--creme)}
+.op.larga{grid-column:1/-1}
+.onde{display:flex;gap:10px;align-items:flex-start;background:var(--marfim);border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.35}
+.onde b{flex:none;padding:3px 9px;border-radius:999px;background:var(--lilas);color:#5B3A6E;font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.onde small{display:block;color:var(--suave);font-size:12.5px;margin-top:2px}
+.voz{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.voz span{font-size:14px;color:var(--suave)}
+.parcial{color:var(--suave);font-style:italic;font-size:14px;min-height:0}
+.res{font-weight:800}
+.res.ok{color:var(--verde)}
+.res.erro{color:var(--vermelho)}
+.erro-campo{color:var(--vermelho);font-size:13.5px;font-weight:700}
+@media (prefers-reduced-motion:no-preference){button.ouvindo{animation:pulso 1.4s ease-in-out infinite}}
+@keyframes pulso{50%{box-shadow:0 0 0 8px rgba(206,59,50,.18)}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+ <header>
+  <p class="olho">Entre Ser · estudo Eu desperto</p>
+  <h1 id="titulo">Enviar comentários</h1>
+ </header>
+ <p class="intro" id="intro">Confira o que vai seguir para a equipe e toque em Enviar.</p>
+
+ <section class="cartao aviso" id="aviso" hidden aria-labelledby="avisoT">
+  <h2 id="avisoT">Antes de enviar</h2>
+  <p>O que você enviar vai para uma planilha da equipe do Entre Ser, com o seu nome. Ninguém de fora vê.</p>
+  <p>Ao falar, o navegador usa um serviço do Google para transformar a voz em texto. Nada é gravado em áudio.</p>
+  <button type="button" id="btAviso">Entendi</button>
+ </section>
+
+ <section class="cartao" id="quem" aria-labelledby="quemT">
+  <h2 id="quemT">Quem está enviando</h2>
+  <label for="nome">Seu nome</label>
+  <input id="nome" autocomplete="name" placeholder="Escreva seu nome">
+  <p class="rot" id="papelL">Você é</p>
+  <div class="ops" role="radiogroup" aria-labelledby="papelL" id="papeis"></div>
+ </section>
+
+ <div id="itens"></div>
+
+ <section class="cartao" id="envio" aria-live="polite">
+  <button type="button" id="btEnviar">Enviar</button>
+  <p class="res" id="resEnvio" role="status"></p>
+  <p class="dica" id="depois" hidden>Pode fechar esta aba e voltar ao estudo. Lá, toque em Já enviei.</p>
+ </section>
+</main>
+<script src="voz.js"></script>
+<script>
+(() => {
+ const ENVIO_URL = 'https://script.google.com/macros/s/AKfycby8nZkeitSj3kSWpuH681ZrmofwLZ4uk_y2z11aML6gExlUQklr3yA5eknXx75CFyW72w/exec';
+ const $ = id => document.getElementById(id);
+ const LS = { get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v) } catch (_) { return d } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch (_) { } } };
+ const ES = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+ const PAPEIS = ['Fundadora', 'Equipe Entre Ser', 'Outra pessoa convidada'];
+ const PEDE = [['manter', 'Manter assim'], ['ajustar', 'Ajustar'], ['tirar', 'Tirar'], ['incomoda', 'Não sei explicar, mas incomoda']];
+ const ESCOPO = [['aqui', 'Só aqui'], ['sempre', 'Sempre que aparecer'], ['nao_sei', 'Não sei dizer']];
+ const TIPO = { texto: 'Texto', imagem: 'Imagem', video: 'Vídeo', interacao: 'Interação', botao: 'Botão ou cartão' };
+
+ /* ---------- o que chegou pelo link ---------- */
+ const desb64u = s => decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));
+ function lerLink() {
+  const m = location.hash.match(/^#d=([A-Za-z0-9_-]+)$/); if (!m) return null;
+  try { const d = JSON.parse(desb64u(m[1])); return d && Array.isArray(d.itens) ? d : null } catch (_) { return null }
+ }
+ /* caixa de saída: o que chegou e ainda não foi confirmado pela planilha fica neste navegador */
+ let saida = LS.get('me-envio-saida', {});
+ const guardarSaida = () => LS.set('me-envio-saida', saida);
+ const recebido = lerLink();
+ let base = { estudo: 'Eu desperto V4', versao_do_estudo: '', id_do_aparelho: '' };
+ if (recebido) {
+  base = { estudo: recebido.estudo || base.estudo, versao_do_estudo: recebido.versao_do_estudo || '', id_do_aparelho: recebido.id_do_aparelho || '' };
+  /* o que já foi editado aqui vale mais que o que veio no link (recarregar a página não apaga a fala) */
+  recebido.itens.forEach(c => { if (c && c.id && !(saida[c.id] && saida[c.id].enviado)) saida[c.id] = Object.assign({ enviado: false }, c, saida[c.id] || {}, { enviado: false }) });
+  guardarSaida();
+  const quem = LS.get('me-envio-quem', null);
+  if (!quem && recebido.autora) LS.set('me-envio-quem', { nome: recebido.autora, papel: recebido.papel || PAPEIS[0] });
+ }
+ const pendentes = () => Object.values(saida).filter(c => !c.enviado).sort((a, b) => String(a.quando).localeCompare(String(b.quando)));
+
+ /* ---------- quem ---------- */
+ const quem = LS.get('me-envio-quem', { nome: '', papel: PAPEIS[0] });
+ $('nome').value = quem.nome || '';
+ $('papeis').innerHTML = PAPEIS.map((p, k) => `<button type="button" class="op${k === 2 ? ' larga' : ''}" role="radio" aria-checked="${quem.papel === p}" data-papel="${ES(p)}">${ES(p)}</button>`).join('');
+ const lerQuem = () => { const b = document.querySelector('[data-papel][aria-checked="true"]'); return { nome: $('nome').value.trim(), papel: b ? b.dataset.papel : PAPEIS[0] } };
+ $('nome').addEventListener('change', () => LS.set('me-envio-quem', lerQuem()));
+ $('papeis').addEventListener('click', e => { const b = e.target.closest('[data-papel]'); if (!b) return; document.querySelectorAll('[data-papel]').forEach(x => x.setAttribute('aria-checked', String(x === b))); LS.set('me-envio-quem', lerQuem()) });
+
+ /* ---------- aviso de privacidade, só na primeira vez ---------- */
+ if (!LS.get('me-envio-aviso', false)) $('aviso').hidden = false;
+ $('btAviso').addEventListener('click', () => { LS.set('me-envio-aviso', true); $('aviso').hidden = true });
+
+ /* ---------- os comentários ---------- */
+ const vozes = {};
+ function cartao(c, k, n) {
+  const o = c.onde || {};
+  const onde2 = [o.conteudo_titulo ? 'Conteúdo: ' + o.conteudo_titulo : o.janela ? 'Janela: ' + o.janela : 'Página do momento', o.trecho ? '“' + String(o.trecho).slice(0, 80) + (String(o.trecho).length > 80 ? '…' : '') + '”' : ''].filter(Boolean).join(' · ');
+  const vozOk = window.Voz && Voz.suportado;
+  return `<section class="cartao" data-item="${ES(c.id)}" aria-labelledby="t-${ES(c.id)}">
+  <p class="olho" id="t-${ES(c.id)}">Comentário ${k + 1} de ${n}</p>
+  <div class="onde"><b>${ES(TIPO[o.tipo] || 'Ponto')}</b><div>${ES(o.momento_nome || '')}<small>${ES(onde2)}</small></div></div>
+  ${vozOk ? `<div class="voz"><button type="button" class="sec" data-falar="${ES(c.id)}">Falar</button><span data-voz-tx="${ES(c.id)}">${c.falar ? 'Toque em Falar e diga o que achou.' : 'Pode falar para completar o que escreveu.'}</span></div>`
+          : `<p class="dica">Para falar em vez de escrever, toque no campo e use o microfone do teclado.</p>`}
+  <label for="tx-${ES(c.id)}">O que você achou?</label>
+  <textarea id="tx-${ES(c.id)}" data-texto="${ES(c.id)}" placeholder="Escreva do seu jeito, como se estivesse conversando.">${ES(c.texto || '')}</textarea>
+  <p class="parcial" data-parcial="${ES(c.id)}" aria-live="polite"></p>
+  <p class="rot" id="pl-${ES(c.id)}">Isso pede</p>
+  <div class="ops" role="radiogroup" aria-labelledby="pl-${ES(c.id)}">${PEDE.map(([v, r]) => `<button type="button" class="op" role="radio" aria-checked="${c.pede === v}" data-pede="${v}" data-de="${ES(c.id)}">${ES(r)}</button>`).join('')}</div>
+  <p class="rot" id="el-${ES(c.id)}">Vale só aqui ou sempre que aparecer algo parecido?</p>
+  <div class="ops" role="radiogroup" aria-labelledby="el-${ES(c.id)}">${ESCOPO.map(([v, r], j) => `<button type="button" class="op${j === 2 ? ' larga' : ''}" role="radio" aria-checked="${c.escopo === v}" data-escopo="${v}" data-de="${ES(c.id)}">${ES(r)}</button>`).join('')}</div>
+  <p class="erro-campo" data-erro="${ES(c.id)}" role="alert"></p>
+ </section>`;
+ }
+ function desenhar() {
+  const L = pendentes();
+  if (!L.length) {
+   $('itens').innerHTML = ''; $('btEnviar').hidden = true;
+   if (!$('depois').hidden) return;
+   $('intro').textContent = recebido ? 'Estes comentários já chegaram à equipe. Pode fechar esta aba.' : 'Nada para enviar. Abra esta página pelo botão Enviar para a equipe, no estudo.';
+   return;
+  }
+  $('btEnviar').hidden = false;
+  $('btEnviar').textContent = L.length === 1 ? 'Enviar' : `Enviar os ${L.length} comentários`;
+  $('intro').textContent = L.some(c => c.falar && !c.texto) ? 'Toque em Falar, diga o que achou e confira o texto. Depois toque em Enviar.' : 'Confira o que vai seguir para a equipe e toque em Enviar.';
+  $('itens').innerHTML = L.map((c, k) => cartao(c, k, L.length)).join('');
+ }
+ const item = id => saida[id];
+ document.addEventListener('input', e => { const id = e.target.dataset && e.target.dataset.texto; if (id && item(id)) { item(id).texto = e.target.value; guardarSaida() } });
+ document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.pede || b.dataset.escopo) {
+   const id = b.dataset.de, campo = b.dataset.pede ? 'pede' : 'escopo', v = b.dataset[campo];
+   item(id)[campo] = v; guardarSaida();
+   b.parentElement.querySelectorAll('[data-' + campo + ']').forEach(x => x.setAttribute('aria-checked', String(x === b)));
+   return;
+  }
+  if (b.dataset.falar) alternarVoz(b.dataset.falar, b);
+ });
+
+ /* ---------- voz por comentário ---------- */
+ function alternarVoz(id, bt) {
+  const tx = document.querySelector(`[data-texto="${id}"]`), info = document.querySelector(`[data-voz-tx="${id}"]`), parc = document.querySelector(`[data-parcial="${id}"]`);
+  let v = vozes[id];
+  if (v && v.ativo) { tx.value = v.parar(); item(id).texto = tx.value; guardarSaida(); parc.textContent = ''; bt.textContent = 'Falar'; bt.classList.remove('ouvindo'); info.textContent = 'Confira o texto. Pode corrigir antes de enviar.'; return }
+  Object.values(vozes).forEach(x => { if (x.ativo) x.parar() });
+  v = vozes[id] = Voz.criar({
+   aoMudar: s => {
+    tx.value = s.texto(); parc.textContent = s.parciais;
+    if (!s.ativo) { item(id).texto = tx.value; guardarSaida(); bt.textContent = 'Falar'; bt.classList.remove('ouvindo') }
+   },
+   aoErro: (codigo, motivo, s) => { info.textContent = 'Não deu para ouvir: ' + motivo + '. Você pode escrever no campo.'; if (!s.ativo) { bt.textContent = 'Falar'; bt.classList.remove('ouvindo') } }
+  });
+  if (v.iniciar(tx.value)) { item(id).como_falou = 'voz'; guardarSaida(); bt.textContent = 'Parar'; bt.classList.add('ouvindo'); info.textContent = 'Ouvindo. Toque em Parar quando terminar.' }
+ }
+
+ /* ---------- enviar ---------- */
+ function enviar(itens) {
+  return fetch(ENVIO_URL, { method: 'POST', body: JSON.stringify({ acao: 'comentarios', itens }), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow' })
+   .then(res => res.ok ? res.text() : Promise.reject(new Error('resposta ' + res.status)))
+   .then(t => { let j = null; try { j = JSON.parse(t) } catch (_) { } if (j && j.ok) return j; throw new Error(j && j.erro ? j.erro : 'a planilha não confirmou') })
+   .catch(e => { throw (e && e.name === 'TypeError' ? new Error('sem resposta da planilha') : e) });
+ }
+ $('btEnviar').addEventListener('click', () => {
+  Object.entries(vozes).forEach(([id, v]) => { if (v.ativo) { const tx = document.querySelector(`[data-texto="${id}"]`); if (tx) { tx.value = v.parar(); item(id).texto = tx.value } } });
+  const q = lerQuem(); LS.set('me-envio-quem', q);
+  if (!q.nome) { $('resEnvio').className = 'res erro'; $('resEnvio').textContent = 'Escreva seu nome antes de enviar.'; $('nome').focus(); return }
+  const L = pendentes(); let falta = false;
+  L.forEach(c => { const e = document.querySelector(`[data-erro="${c.id}"]`); const vazio = !String(c.texto || '').trim() && !c.pede; if (e) e.textContent = vazio ? 'Escreva ou fale o que achou, ou escolha o que isso pede.' : ''; falta = falta || vazio });
+  if (falta) { $('resEnvio').className = 'res erro'; $('resEnvio').textContent = 'Falta completar um comentário.'; return }
+  const itens = L.map(c => ({ id: c.id, quando: c.quando, estudo: base.estudo, versao_do_estudo: base.versao_do_estudo, autora: q.nome, papel: q.papel, id_do_aparelho: base.id_do_aparelho,
+   texto: String(c.texto || '').trim(), como_falou: c.como_falou || 'teclado', pede: c.pede || '', escopo: c.escopo || '', onde: c.onde || {}, tela: c.tela || {} }));
+  $('btEnviar').disabled = true; $('resEnvio').className = 'res'; $('resEnvio').textContent = 'Enviando…';
+  enviar(itens).then(j => {
+   itens.forEach(c => { saida[c.id].enviado = true }); guardarSaida(); LS.set('me-envio-aviso', true); $('aviso').hidden = true;
+   $('btEnviar').disabled = false; $('resEnvio').className = 'res ok';
+   const n = itens.length; $('resEnvio').textContent = `Recebido. ${n === 1 ? 'O comentário chegou' : 'Os ' + n + ' comentários chegaram'} à equipe. Obrigado.`;
+   $('depois').hidden = false; desenhar();
+  }).catch(e => {
+   $('btEnviar').disabled = false; $('resEnvio').className = 'res erro';
+   $('resEnvio').textContent = 'Não foi enviado: ' + (e && e.message || 'erro') + '. O que você escreveu continua guardado aqui. Tente de novo em instantes.';
+  });
+ });
+ desenhar();
+})();
+</script>
+</body>
+</html>
